@@ -1,119 +1,87 @@
-# 🚀 Yandex Disk → Google Drive
+# 🚀 Yandex.Disk to Google Drive Cloud Migrator
 
-Перенос файлов и папок с Яндекс Диска в Google Drive через виртуальную машину Google Colab. Архив не скачивается на компьютер: данные проходят через Colab и записываются в Google Drive.
+Прямой перенос архивов и файлов из **Яндекс Диска** в **Google Диск** через виртуальную машину Google Colab — без скачивания на локальный компьютер.
 
-## ⚠️ Требования и ограничения
+---
 
-- **Яндекс 360:** согласно [справке Яндекса](https://yandex.com/support/yandex-360/customers/disk/web/en/webdav), с 22 июня 2026 года доступ к WebDAV требует активного плана Яндекс 360.
-- **Транзит через Colab:** данные идут по маршруту `Яндекс Диск → виртуальная машина Colab → Google Drive`. Это не прямая передача между облачными серверами.
-- **Работа Colab:** среда может отключиться, а её доступность и время работы не гарантированы. На скорость влияют Colab, Яндекс и Google Drive.
-- **Повторный запуск:** команда `copy` не удаляет исходные файлы. При повторе уже скопированные файлы обычно пропускаются; прерванный файл может копироваться заново.
-- **Проверка результата:** перед удалением оригиналов самостоятельно проверьте файлы и папки в Google Drive. Этот код ничего не удаляет на Яндекс Диске.
+## ⚠️ Важные требования и ограничения
+- **Подписка Яндекс 360:** доступ к Яндекс Диску по протоколу WebDAV предоставляется только пользователям с активным тарифом Яндекс 360.
+- **Архитектура переноса:** локальный накопитель не задействуется, трафик идет транзитом: `Яндекс Диск → виртуальная машина Colab → Google Диск`.
+- **Безопасность данных:** используется режим `rclone copy` (исходные файлы на Яндексе не удаляются). Если связь оборвется, повторный запуск продолжит перенос без дублирования уже скачанных файлов.
 
-## 🔐 Безопасность
+---
 
-- Используйте отдельный **пароль приложения WebDAV**, а не основной пароль Яндекса.
-- Не отправляйте пароль приложения помощнику и не публикуйте его в блокноте, скриншотах или переписке.
-- `getpass` скрывает пароль при вводе, а `rclone obscure` обратимо маскирует его в конфигурации. Это **не полноценное шифрование**.
-- Подключение Google Drive разрешает коду блокнота доступ к вашему диску. Перед запуском просмотрите код.
-- После переноса отзовите пароль приложения в настройках Яндекс ID.
+## ⚡ Преимущества
+- **0 байт на диске ПК:** свободное место на компьютере не расходуется.
+- **Прямой облачный трафик:** перенос идет на сетевых мощностях Google Colab.
+- **Идемпотентность:** при перезапуске уже переданные файлы автоматически пропускаются.
 
-## 🛠 Как запустить
+---
 
-1. Убедитесь, что на аккаунте Яндекса доступен WebDAV.
-2. Создайте пароль приложения WebDAV в [настройках Яндекс ID](https://id.yandex.ru/security/app-passwords).
-3. Откройте [Google Colab](https://colab.research.google.com/) и создайте новый блокнот.
-4. Вставьте код ниже в одну ячейку и запустите её.
-5. Разрешите доступ к Google Drive, введите логин Яндекса и пароль приложения.
-6. После завершения проверьте папку `Yandex_Backup` на Google Диске.
+## 🛠 Как запустить перенос
 
-> Для начала попробуйте перенести небольшую тестовую папку.
-
-## 📦 Нужна помощь с переносом под ключ?
-Если нужно перенести сотни гигабайт или терабайты данных, сохранить сложную структуру папок или просто не хочется вникать в консоль:
-Безопасно: настройка и запуск производятся в вашей личной сессии без передачи паролей третьим лицам.
-Под ключ: сопровождение процесса, контроль целостности и возобновление при обрывах.
-
-👉 Написать в Telegram: @anvlasov1 — помогу быстро и без потери данных
-
-## 💻 Код
+1. Убедитесь, что на аккаунте активен тариф **Яндекс 360**.
+2. Создайте пароль приложения: перейдите в [Яндекс ID → Безопасность → Пароли приложений](https://id.yandex.ru/security/app-passwords) и выберите тип **Файлы (WebDAV)**.
+3. Откройте [Google Colab](https://colab.research.google.com/), создайте новый блокнот и вставьте единый блок кода:
 
 ```python
 from google.colab import drive
-from pathlib import Path
-import getpass
-import os
-import subprocess
+import os, getpass, subprocess
 
-# 1. Подключаем Google Drive
-drive.mount("/content/drive")
-
-target_dir = Path("/content/drive/MyDrive/Yandex_Backup")
-target_dir.mkdir(parents=True, exist_ok=True)
+# 1. Монтируем Google Диск
+drive.mount('/content/drive')
+target_dir = '/content/drive/MyDrive/Yandex_Backup'
+os.makedirs(target_dir, exist_ok=True)
 
 # 2. Устанавливаем rclone
-subprocess.run(["apt-get", "update", "-qq"], check=True)
-subprocess.run(
-    ["apt-get", "install", "-y", "-qq", "rclone"],
-    check=True
-)
+!curl -s [https://rclone.org/install.sh](https://rclone.org/install.sh) | bash > /dev/null
 
-# 3. Вводим данные WebDAV
-yandex_user = input("Логин Яндекса: ").strip()
-yandex_password = getpass.getpass(
-    "Пароль приложения WebDAV: "
-).strip()
+# 3. Ввод учетных данных
+yandex_user = input("Логин Яндекс (без @yandex.ru): ").strip()
+yandex_pass = getpass.getpass("Пароль приложения WebDAV: ").strip()
 
-if not yandex_user or not yandex_password:
-    raise ValueError("Нужно ввести логин и пароль приложения.")
+# 4. Создание защищенной конфигурации rclone
+subprocess.run([
+    "rclone", "config", "create", "yandex_backup", "webdav",
+    "url=[https://webdav.yandex.ru](https://webdav.yandex.ru)",
+    "vendor=other",
+    f"user={yandex_user}",
+    f"pass={yandex_pass}"
+], check=True)
 
-# 4. Маскируем пароль для конфигурации rclone
-result = subprocess.run(
-    ["rclone", "obscure", yandex_password],
-    check=True,
-    capture_output=True,
-    text=True
-)
-obscured_password = result.stdout.strip()
+# 5. Выбор папки (Enter для переноса всего диска)
+folder_name = input("Какую папку перенести? (Enter для ВСЕГО диска): ").strip()
+source = f"yandex_backup:{folder_name}" if folder_name else "yandex_backup:/"
 
-# Удаляем лишнюю ссылку на пароль из переменной
-del yandex_password
+print(f"\n🚀 Запуск процесса переноса из [{source}] в [{target_dir}]...")
+print("⏳ Пожалуйста, не закрывайте вкладку блокнота во время копирования.\n")
 
-# 5. Создаём временную конфигурацию WebDAV
-config_path = Path("/content/rclone-migration.conf")
-config_text = (
-    "[yandex_webdav]\n"
-    "type = webdav\n"
-    "url = https://webdav.yandex.ru\n"
-    "vendor = other\n"
-    f"user = {yandex_user}\n"
-    f"pass = {obscured_password}\n"
-)
-config_path.write_text(config_text, encoding="utf-8")
-os.chmod(config_path, 0o600)
+# 6. Надежное копирование с защитой от rate limit Яндекса
+cmd = [
+    "rclone", "copy", source, target_dir,
+    "--exclude", ".Trash/**",
+    "--exclude", "Корзина/**",
+    "--transfers", "2",
+    "--checkers", "1",
+    "--tpslimit", "2",
+    "--retries", "5",
+    "--low-level-retries", "10",
+    "--buffer-size", "32M",
+    "-v", "--stats", "10s"
+]
 
-del obscured_password
+subprocess.run(cmd, check=True)
 
-# 6. Проверяем подключение и список папок
-subprocess.run(
-    ["rclone", "lsd", "yandex_webdav:", "--config", str(config_path)],
-    check=True
-)
+print("\n🎉 Перенос успешно завершен! Все файлы сохранены в Google Drive.")
+```
 
-# 7. Копируем файлы в Google Drive
-subprocess.run(
-    [
-        "rclone", "copy",
-        "yandex_webdav:",
-        str(target_dir),
-        "--config", str(config_path),
-        "--progress",
-        "--transfers", "4",
-        "--checkers", "8",
-        "--retries", "5",
-        "--low-level-retries", "10",
-    ],
-    check=True
-)
+---
 
-print(f"Копирование завершено. Проверьте папку: {target_dir}")
+> ### 📦 **Нужна помощь с переносом под ключ?**
+> 
+> Если нужно перенести **сотни гигабайт или терабайты данных**, сохранить сложную структуру каталогов или нет желания возиться с окружением:
+> 
+> - **Безопасно:** запуск производится в вашей личной сессии без передачи паролей третьим лицам.
+> - **Контроль целостности:** проверка завершения передачи каждого файла и решение возможных сетевых сбоев.
+> 
+> 👉 **Написать в Telegram:** [@anvlasov1](https://t.me/anvlasov1) — помогу настроить и провести миграцию.
