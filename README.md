@@ -42,3 +42,7 @@ with open('/root/.config/rclone/rclone.conf', 'w') as f:
     f.write(config)
 
 !rclone copy -P --transfers=8 --checkers=16 yandex:/ "{target_dir}"
+
+🤝 Помощь с переносом под ключ
+Если нужно перенести большие объемы данных без настройки:
+Telegram: @anvlasov1
